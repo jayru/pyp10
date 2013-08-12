@@ -1,0 +1,1 @@
+class Pseudo(object): pass
