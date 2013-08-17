@@ -20,9 +20,7 @@ class config(object):
 
 def process(line):
 	words = line.split()
-	print "process"
 	if words[1] == "G" or words[1] == "PING":
-		print "PING!", line
 		uplink.send("Z %(numeric)s :%(id)s" % {'numeric': config.numeric, 'id': config.uplink['name']})
 
 class Server(object):
@@ -51,8 +49,8 @@ class Uplink(Server):
 		self._transmit("PASS %s" % (config.uplink['password']))
 		self._transmit("SERVER %(name)s 1 %(time)s %(time)s J10 %(numeric)s]]] +s :PyP10 Services" % {'name': config.name, 'time': time.time(), 'numeric': config.numeric})
 		self.send("EB")
-		self._transmit("]S G services.p10 test.p10") #todo
-	#def send - inherited
+		self.send("N Q 1 %(time)s q %(host)s +oknXr pyp10 DAqAAB ]SAAQ :Hax!", time=time.time(), host=config.name)
+		self.send("J #p10 780000000", ']SAAQ')
 	def _transmit(self, line):
 		print ">", line
 		self.sock.sendall(line+"\r\n")
