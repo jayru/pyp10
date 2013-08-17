@@ -5,6 +5,7 @@ import socket, time
 
 uplink = None
 modules = {}
+modcount = 0
 
 class config(object):
 	name = 'services.p10'
@@ -31,13 +32,16 @@ class Uplink(object):
 		self.nums = {} # 'num': Pseudo-object
 		self.data = "" # receive buffer
 
+		self.bursting = True
+		self.bursted = 0
+		self.burstchans = {}
+
 		self.sock = socket.socket()
 		self.sock.bind((config.uplink['vhost'], 0))
 		self.sock.connect((config.uplink['address'], config.uplink['port']))
 
 		self._transmit("PASS %s" % (config.uplink['password']))
 		self._transmit("SERVER %(name)s 1 %(time)s %(time)s J10 %(numeric)s]]] +s :PyP10 Services" % {'name': config.name, 'time': time.time(), 'numeric': config.numeric})
-		self.send("EB")
 	def send(self, line, source=None, **kwargs):
 		if source is None:
 			source = config.numeric
@@ -57,12 +61,16 @@ class Uplink(object):
 	def loop(self):
 		keepgoing = True
 		while keepgoing:
+			if self.bursting and self.bursted >= modcount:
+				self._burstisdone()
 			keepgoing = self._receive()
 
 	def _process(self, line):
 		words = line.split()
 		if words[1] == "G" or words[1] == "PING":
 			self.send("Z %(numeric)s :%(id)s" % {'numeric': config.numeric, 'id': config.uplink['name']})
+		elif words[1] == "EB":
+			self.send("EA")
 		elif words[1] == "P" or words[1] == "PRIVMSG":
 			source = words[0]
 			target = words[2]
@@ -95,7 +103,35 @@ class Uplink(object):
 		self.nums[newnum] = obj
 		self.nicks[nick] = obj
 		return newnum
+	def join(self, chan, source, op=False):
+#		if self.bursting:
+#			if chan not in self.burstchans:
+#				self.burstchans[chan] = {'ops':[], 'regs':[]}
+#
+#			if op:
+#				self.burstchans[chan]['ops'].append(source)
+#			else:
+#				self.burtschans[chan]['regs'].append(source)
+#		else: # not bursting
+		self.send("J %(chan)s %(time)s", source, chan=chan, time=time.time()+3600)
+		if op:
+			self.send("OM %(chan)s +nto %(num)s", source, chan=chan, num=source)
+	def endburst(self, module):
+		self.bursted += 1
+		print module.num, self.bursted, modcount
+	def _burstisdone(self):
+		self.bursting = False
+		for chname, chan in self.burstchans.iteritems():
+			users = chan['regs']
 
+			if len(chan['ops']) != 0:
+				chan['ops'][0] += ':o'
+				users.extend(chan['ops'])
+
+			mems = ','.join(users)
+			self.send("B %(chan)s 780000001 +nt %(members)s", chan=chname, members=mems)
+		self.send("EB")
+		self.burtchans = {}
 
 class Account(object):
 	pass
@@ -107,5 +143,6 @@ uplink = Uplink()
 
 for modu in config.autoload:
 	modules[modu] = (__import__('modules.'+str(modu), globals(), locals(), ['Pseudo'], 0)).Pseudo(uplink)
+	modcount += 1
 
 uplink.loop()

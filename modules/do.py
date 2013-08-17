@@ -5,7 +5,8 @@ class Pseudo(object):
 		self.uplink = uplink
 		self.nick = 'Do'
 		self.num = self.uplink.makenick(self, self.nick, 'TheDoBot','PyP10 Do')
-		self._send("J #p10 780000000")
+		self.uplink.join("#p10", self.num, op=True)
+		self.uplink.endburst(self)
 	def _send(self, line, **kwargs):
 		self.uplink.send(line, self.num, **kwargs)
 	def gotmsg(self, msg, source, target):
