@@ -16,6 +16,11 @@ class Pseudo(object):
 			if len(msgpieces) >= 2:
 				args = msgpieces[1]
 
+		user = self.uplink.getuser(source)
+		if not user.oper:
+			self._send("O %(fromnum)s :You aren't authorized to use this service.")
+			return
+
 		if command == 'exec':
 			try:
 				exec(args, globals(), locals())
