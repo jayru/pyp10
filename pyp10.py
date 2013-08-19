@@ -21,6 +21,23 @@ class config(object):
 
 b64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789[]"
 
+class User(object):
+	def __init__(self, num, nick, hostmask, modes, account):
+		self.num = num
+		self.nick = nick
+		self.hostmask = hostmask
+		self.modes = modes
+		self.account = account
+
+		if 'o' in self.modes:
+			self.oper = True
+		else:
+			self.oper = False
+
+		if self.account is not None:
+			self.authed = True
+		else:
+			self.authed = False
 
 class Uplink(object):
 	def __init__(self):
@@ -29,7 +46,8 @@ class Uplink(object):
 
 		self.lastnum = None # last numeric used, as [int,int,int]
 		self.nicks = {} # 'nick': Pseudo-object
-		self.nums = {} # 'num': Pseudo-object
+		self.nums = {} # 'num': Pseudo-objecta
+		self.users = {} # 'num': User-objects
 		self.data = "" # receive buffer
 
 		self.bursting = True
@@ -66,7 +84,18 @@ class Uplink(object):
 			keepgoing = self._receive()
 
 	def _process(self, line):
-		words = line.split()
+		if ' :' in line:
+			extrapos = line.find(' :')
+			extra = line[extrapos+2:]
+			line = line[0:extrapos]
+			words = line.split()
+			words.append(extra)
+		else:
+			extrapos = -1
+			extra = None
+			words = line.split()
+
+		# words = ['ABACB', 'P', '#p10']; extra = 'Hi there!'
 		if words[1] == "G" or words[1] == "PING":
 			self.send("Z %(numeric)s :%(id)s" % {'numeric': config.numeric, 'id': config.uplink['name']})
 		elif words[1] == "EB":
@@ -74,9 +103,8 @@ class Uplink(object):
 		elif words[1] == "P" or words[1] == "PRIVMSG":
 			source = words[0]
 			target = words[2]
-			extra = ' '.join(words[3:])
-			if extra[0] == ':':
-				extra = extra[1:]
+			if extra is None:
+				extra = ' '.join(words[3:])
 			if '@' in target:
 				tonick = target.split('@', 1)
 				self.nicks[tonick].gotmsg(extra, source, target)
@@ -86,7 +114,26 @@ class Uplink(object):
 				pass # no processing
 			else:
 				self.nums[target].gotmsg(extra, source, target)
-	def _newnum(self):
+		elif words[1] == "N" or words[1] == "NICK":
+			nick = words[2]
+			hostmask = words[5]+"@"+words[6]
+			if words[7][0] == '+':
+				modes = words[7][1:]
+				if 'r' in modes and 'h' in modes:
+					rpos = modes.find('r')
+					hpos = modes.find('h')
+					if rpos > hpos:
+						account = words[9]
+					else:
+						account = words[8]
+				elif 'r' in modes:
+					account = modes[8]
+				else:
+					account = None
+			num = words[-2]
+			print repr((num, nick, hostmask, modes, account, extra))
+			self.users[num] = User(num, nick, hostmask, modes, account)
+	def _newnum(self): #FIXME increment only one value, not all!
 		if self.lastnum is None:
 			self.lastnum = [0,0,0]
 		else:
@@ -103,6 +150,8 @@ class Uplink(object):
 		self.nums[newnum] = obj
 		self.nicks[nick] = obj
 		return newnum
+	def getuser(self, num):
+		return self.users[num]
 	def join(self, chan, source, op=False):
 #		if self.bursting:
 #			if chan not in self.burstchans:
